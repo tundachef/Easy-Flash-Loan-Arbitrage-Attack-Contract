@@ -168,7 +168,7 @@ contract UniswapV3PriceFetcher {
         uint256 priceRaw = sqrtPriceX96Squared / (1 << 192);
         
         // Assuming the price is token per WETH, and converting it to a standard decimal format
-        price = (1e18 * 1000000) / priceRaw;
+        price = (1e18) / priceRaw;
         return price;
     }
 }
