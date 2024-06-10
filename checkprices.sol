@@ -54,6 +54,12 @@ contract FlashloanAttacker is FlashLoanSimpleReceiverBase {
   address public routerAddressV3 = 0xE592427A0AEce92De3Edee1F18E0157C05861564;
   ISwapRouter public immutable swapRouterV3 = ISwapRouter(routerAddressV3);
 
+    IUniswapV3Factory public v3factory = IUniswapV3Factory(0x1F98431c8aD98523631AE4a59f267346ea31F984);
+    address public usdc = 0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359;
+
+    IUniswapV2Factory public v2factory = IUniswapV2Factory(0x5757371414417b8C6CAad45bAeF941aBc7d3Ab32);
+    bool public v2tov3Swap = true;
+
 
   constructor(IPoolAddressesProvider provider) FlashLoanSimpleReceiverBase(provider) {
     _pool = IPool(provider.getPool());
@@ -139,6 +145,26 @@ contract FlashloanAttacker is FlashLoanSimpleReceiverBase {
     }
 
 
+    function flashRun(uint256 _amount) external onlyOwner {
+        address tweth = 0x7ceB23fD6bC0adD59E62ac25578270cFf1b9f619; // weth address polygon
+        swapTo = tweth;
+        uint256 v3price = getV3TokenPrice(tweth);
+        uint256 v2price = getV2TokenPrice(tweth);
+        if(v2price > v3price) {
+            v2tov3Swap = false;
+        }
+        if(v2price == v3price) {
+            return;
+        }
+        if(v2price < v3price) {
+            v2tov3Swap = true;
+        }
+
+        amountOutV2 = 1;
+        requestFlashLoan(usdc, _amount);
+    }
+
+
     function getBalance(address _tokenAddress) public view returns (uint256) {
         return IERC20(_tokenAddress).balanceOf(address(this));
     }
@@ -149,13 +175,51 @@ contract FlashloanAttacker is FlashLoanSimpleReceiverBase {
         token.transfer(address(msg.sender), balance);
     }
 
+
+    function getV3TokenPrice(address token) public view returns (uint256 price) {
+        address poolAddress = v3factory.getPool(token, usdc, 3000);
+        require(poolAddress != address(0), "Pool does not exist");
+        
+        IUniswapV3Pool pool = IUniswapV3Pool(poolAddress);
+        (uint160 sqrtPriceX96,,,,,,) = pool.slot0();
+        
+        // Convert the sqrtPriceX96 to a human-readable price
+        
+        uint256 sqrtPriceX96Squared = uint256(sqrtPriceX96) * uint256(sqrtPriceX96);
+        uint256 priceRaw = sqrtPriceX96Squared / (1 << 192);
+        
+        // Assuming the price is token per WETH, and converting it to a standard decimal format
+        price = (1e18) / priceRaw;
+        return price;
+    }
+
+
+    function getV2TokenPrice(address token) public view returns (uint256 price) {
+        address pairAddress = v2factory.getPair(token, usdc);
+        require(pairAddress != address(0), "Pool does not exist");
+        
+        IUniswapV2Pair pair = IUniswapV2Pair(pairAddress);
+        (uint112 reserve0, uint112 reserve1,) = pair.getReserves();
+        
+        address token0 = pair.token0();
+        // address token1 = pair.token1();
+        
+        if (token0 == usdc) {
+            // token0 is WETH, token1 is the target token
+            price = (reserve0 * 1e18) / reserve1; // price of token in terms of WETH
+        } else {
+            // token1 is WETH, token0 is the target token
+            price = (reserve1 * 1e18) / reserve0; // price of token in terms of WETH
+        }
+    }
+
 }
 
 contract UniswapV3PriceFetcher {
     IUniswapV3Factory public factory = IUniswapV3Factory(0x1F98431c8aD98523631AE4a59f267346ea31F984);
     address public usdc = 0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359;
 
-    function getTokenPrice(address token) external view returns (uint256 price) {
+    function getV3TokenPrice(address token) external view returns (uint256 price) {
         address poolAddress = factory.getPool(token, usdc, 3000);
         require(poolAddress != address(0), "Pool does not exist");
         
@@ -178,7 +242,7 @@ contract QuickSwapV2PriceFetcher {
     IUniswapV2Factory public factory = IUniswapV2Factory(0x5757371414417b8C6CAad45bAeF941aBc7d3Ab32);
     address public weth = 0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359;
 
-    function getTokenPrice(address token) external view returns (uint256 price) {
+    function getV2TokenPrice(address token) external view returns (uint256 price) {
         address pairAddress = factory.getPair(token, weth);
         require(pairAddress != address(0), "Pool does not exist");
         
