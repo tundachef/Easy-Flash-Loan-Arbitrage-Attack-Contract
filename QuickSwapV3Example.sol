@@ -20,6 +20,7 @@ contract SwapExamples {
     address public constant WMATIC = 0x0d500B1d8E8eF31E21C99d1Db9A6444d3ADf1270;
     address public constant USDC = 0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174;
 
+    /// TESTED THIS WORKS PERFECTLY
     /// @notice swapExactInputSingle swaps a fixed amount of DAI for a maximum possible amount of WMATIC
     /// using the DAI/WMATIC 0.3% pool by calling `exactInputSingle` in the swap router.
     /// @dev The calling address must approve this contract to spend at least `amountIn` worth of its DAI for this function to succeed.
@@ -41,7 +42,7 @@ contract SwapExamples {
                 tokenIn: DAI,
                 tokenOut: WMATIC,
                 recipient: msg.sender,
-                deadline: block.timestamp + 300,
+                deadline: block.timestamp + 300, //5 MINUTES DEADLINE 
                 amountIn: amountIn,
                 amountOutMinimum: 0,
                 limitSqrtPrice: 0
