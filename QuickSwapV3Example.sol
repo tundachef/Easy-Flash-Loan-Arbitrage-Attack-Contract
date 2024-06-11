@@ -43,7 +43,7 @@ contract SwapExamples {
             ISwapRouter.ExactInputSingleParams({
                 tokenIn: DAI,
                 tokenOut: WMATIC,
-                recipient: address(this),
+                recipient: address(this), // solved big errors also amountIn should be max DAI
                 deadline: block.timestamp + 300, //5 MINUTES DEADLINE 
                 amountIn: amountIn,
                 amountOutMinimum: 0,
