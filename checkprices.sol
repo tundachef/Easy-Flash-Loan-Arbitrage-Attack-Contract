@@ -32,6 +32,8 @@ import "@uniswap/v3-core/contracts/interfaces/IUniswapV3Pool.sol";
 import "@uniswap/v3-core/contracts/interfaces/IUniswapV3Factory.sol";
 import "@uniswap/v2-core/contracts/interfaces/IUniswapV2Factory.sol";
 import "@uniswap/v2-core/contracts/interfaces/IUniswapV2Pair.sol";
+import "https://github.com/cryptoalgebra/Algebra/blob/master/src/core/contracts/interfaces/IAlgebraFactory.sol";
+import "./IAlgebraPoolState.sol";
 
 interface IERC20 {
     function approve(address spender, uint256 amount) external returns (bool);
@@ -122,21 +124,36 @@ contract FlashloanAttacker is FlashLoanSimpleReceiverBase {
     }
 
 
-  function executeOperation(
-    address asset,
-    uint256 amount,
-    uint256 premium,
-    address, // initiator
-    bytes memory // params
-  ) public override returns (bool) {
-    preApprove(asset, amount, routerAddressV3); //Approve First Swap
-    swapExactInputSingle(asset, swapTo, amount); //First Swap UniswapV3 BUY TOKEN
-    uint256 toBalance = IERC20(swapTo).balanceOf(address(this)); //Get New Token Balance
-    preApprove(swapTo, toBalance, routerAddressV2); //Approve Second Swap UniswapV2 SELL TOKEN
-    swapUniV2(swapTo, asset, toBalance); //Second Swap
-    IERC20(asset).approve(address(POOL), amount.add(premium));
-    return true;
-  }
+    function executeOperation(
+        address asset,
+        uint256 amount,
+        uint256 premium,
+        address, // initiator
+        bytes memory // params
+    ) public override returns (bool) {
+        if(v2tov3Swap) {
+            // 
+            preApprove(asset, amount, routerAddressV2); //Approve First Swap
+            swapUniV2(asset, swapTo, amount); //First Swap UniswapV3 BUY TOKEN
+            uint256 toBalance = IERC20(swapTo).balanceOf(address(this)); //Get New Token Balance
+            preApprove(swapTo, toBalance, routerAddressV3); //Approve Second Swap UniswapV2 SELL TOKEN
+            swapExactInputSingle(swapTo, asset, toBalance); //Second Swap
+        } else {
+            // 
+            preApprove(asset, amount, routerAddressV3); //Approve First Swap
+            swapExactInputSingle(asset, swapTo, amount); //First Swap UniswapV3 BUY TOKEN
+            uint256 toBalance = IERC20(swapTo).balanceOf(address(this)); //Get New Token Balance
+            preApprove(swapTo, toBalance, routerAddressV2); //Approve Second Swap UniswapV2 SELL TOKEN
+            swapUniV2(swapTo, asset, toBalance); //Second Swap
+        }
+
+        uint256 finalBalance = IERC20(asset).balanceOf(address(this));
+        require(finalBalance >= amount.add(premium), "Repayment amount insufficient");
+
+        IERC20(asset).approve(address(POOL), amount.add(premium));
+        return true;
+            
+    }
 
     function flashAttack(address _token, address to, uint256 _amount, uint256 _amountOut) external onlyOwner {
         swapTo = to;
@@ -259,5 +276,27 @@ contract QuickSwapV2PriceFetcher {
             // token1 is WETH, token0 is the target token
             price = (reserve1 * 1e18) / reserve0; // price of token in terms of WETH
         }
+    }
+}
+
+
+contract AlgebraV3PriceFetcher {
+    IAlgebraFactory public factory = IAlgebraFactory(0x411b0fAcC3489691f28ad58c47006AF5E3Ab3A28);
+    address public usdc = 0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359;
+
+    function getV3TokenPrice(address token) external view returns (uint256 price) {
+        address poolAddress = factory.poolByPair(token, usdc);
+        require(poolAddress != address(0), "Pool does not exist");
+        
+        IAlgebraPoolState pool = IAlgebraPoolState(poolAddress);
+        (uint160 sqrtPriceX96,,,,,,) = pool.globalState();
+        
+        // Convert the sqrtPriceX96 to a human-readable price
+        uint256 sqrtPriceX96Squared = uint256(sqrtPriceX96) * uint256(sqrtPriceX96);
+        uint256 priceRaw = sqrtPriceX96Squared / (1 << 192);
+        
+        // Assuming the price is token per USDC, and converting it to a standard decimal format
+        price = (1e18) / priceRaw;
+        return price;
     }
 }
