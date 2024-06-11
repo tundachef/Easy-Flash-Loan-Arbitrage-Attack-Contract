@@ -33,7 +33,9 @@ contract SwapExamples {
         // TransferHelper.safeTransferFrom(DAI, msg.sender, address(this), amountIn);
 
         // Approve the router to spend DAI.
-        TransferHelper.safeApprove(DAI, address(swapRouter), amountIn);
+        // TransferHelper.safeApprove(DAI, address(swapRouter), amountIn);
+        IERC20 token = IERC20(DAI);
+        token.approve(address(swapRouter), amountIn);
 
         // Naively set amountOutMinimum to 0. In production, use an oracle or other data source to choose a safer value for amountOutMinimum.
         // We also set the sqrtPriceLimitx96 to be 0 to ensure we swap our exact input amount.
@@ -41,7 +43,7 @@ contract SwapExamples {
             ISwapRouter.ExactInputSingleParams({
                 tokenIn: DAI,
                 tokenOut: WMATIC,
-                recipient: msg.sender,
+                recipient: address(this),
                 deadline: block.timestamp + 300, //5 MINUTES DEADLINE 
                 amountIn: amountIn,
                 amountOutMinimum: 0,
